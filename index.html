@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Duotone / Gradient Map Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      .dropzone {
+        border: 2px dashed rgba(255, 255, 255, 0.2);
+      }
+      canvas {
+        image-rendering: optimizeQuality;
+      }
+      .btn {
+        @apply px-4 py-2 rounded-2xl shadow text-sm font-medium;
+      }
+    </style>
+  </head>
+  <body class="bg-neutral-900 text-neutral-100 min-h-screen">
+    <div class="max-w-6xl mx-auto p-6">
+      <header class="flex items-center justify-between mb-6">
+        <h1 class="text-2xl md:text-3xl font-bold">
+          Duotone / Gradient Map Generator
+        </h1>
+        <a
+          href="https://github.com"
+          target="_blank"
+          class="hidden md:inline text-neutral-400 hover:text-white text-sm"
+          >v1.0</a
+        >
+      </header>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Controls -->
+        <section class="lg:col-span-1 space-y-4">
+          <div class="bg-neutral-800/60 rounded-2xl p-4 shadow">
+            <h2 class="font-semibold mb-3">1) Upload Gambar</h2>
+            <label
+              for="fileInput"
+              class="btn bg-indigo-600 hover:bg-indigo-500 cursor-pointer inline-block"
+              >Pilih File</label
+            >
+            <input id="fileInput" type="file" accept="image/*" class="hidden" />
+            <div
+              id="drop"
+              class="dropzone mt-3 rounded-xl p-4 text-neutral-300 text-sm"
+            >
+              Tarik & lepas gambar ke sini…
+            </div>
+          </div>
+
+          <div class="bg-neutral-800/60 rounded-2xl p-4 shadow space-y-3">
+            <h2 class="font-semibold">2) Warna Duotone</h2>
+            <div class="grid grid-cols-2 gap-3 items-center">
+              <div>
+                <label class="text-xs text-neutral-400">Gelap</label>
+                <input
+                  id="cDark"
+                  type="color"
+                  value="#096234"
+                  class="w-full h-10 rounded"
+                />
+                <input
+                  id="cDarkHex"
+                  type="text"
+                  value="#096234"
+                  class="mt-1 w-full bg-neutral-900/60 border border-neutral-700 rounded px-2 py-1 text-xs"
+                />
+              </div>
+              <div>
+                <label class="text-xs text-neutral-400">Terang</label>
+                <input
+                  id="cLight"
+                  type="color"
+                  value="#FF89C7"
+                  class="w-full h-10 rounded"
+                />
+                <input
+                  id="cLightHex"
+                  type="text"
+                  value="#FF89C7"
+                  class="mt-1 w-full bg-neutral-900/60 border border-neutral-700 rounded px-2 py-1 text-xs"
+                />
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="text-xs text-neutral-400">Kontras</label>
+                <input
+                  id="contrast"
+                  type="range"
+                  min="-100"
+                  max="100"
+                  value="0"
+                  class="w-full"
+                />
+                <div class="text-xs" id="contrastVal">0</div>
+              </div>
+              <div>
+                <label class="text-xs text-neutral-400">Intensitas</label>
+                <input
+                  id="intensity"
+                  type="range"
+                  min="0"
+                  max="100"
+                  value="100"
+                  class="w-full"
+                />
+                <div class="text-xs" id="intensityVal">100%</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-neutral-800/60 rounded-2xl p-4 shadow space-y-3">
+            <h2 class="font-semibold">3) Ekspor</h2>
+            <div class="grid grid-cols-2 gap-3">
+              <select
+                id="format"
+                class="bg-neutral-900/60 border border-neutral-700 rounded px-2 py-2 text-sm"
+              >
+                <option value="image/png">PNG</option>
+                <option value="image/jpeg">JPEG</option>
+                <option value="image/webp">WEBP</option>
+              </select>
+              <input id="quality" type="range" min="50" max="100" value="95" />
+            </div>
+            <button
+              id="downloadBtn"
+              class="btn w-full bg-emerald-600 hover:bg-emerald-500"
+            >
+              Download
+            </button>
+          </div>
+        </section>
+
+        <!-- Preview -->
+        <section class="lg:col-span-2">
+          <div
+            class="bg-neutral-800/60 rounded-2xl p-4 shadow flex flex-col gap-3"
+          >
+            <div class="flex items-center justify-between">
+              <div class="text-sm text-neutral-300">Preview</div>
+              <div class="flex gap-2 text-xs text-neutral-400">
+                <button id="fitBtn" class="underline">Fit</button>
+                <button id="fillBtn" class="underline">Fill</button>
+                <button id="resetBtn" class="underline">Reset</button>
+              </div>
+            </div>
+            <div
+              class="relative bg-neutral-900 rounded-xl overflow-hidden aspect-[4/3] md:aspect-video"
+            >
+              <canvas
+                id="canvas"
+                class="absolute inset-0 w-full h-full"
+              ></canvas>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <footer class="mt-8 text-xs text-neutral-500">
+        Made for clean, structured, and optimal web workflow — Vue version
+        available if needed.
+      </footer>
+    </div>
+
+    <script>
+      function clamp(v, a, b) {
+        return Math.min(b, Math.max(a, v));
+      }
+      function lerp(a, b, t) {
+        return a + (b - a) * t;
+      }
+      function hexToRgb(hex) {
+        const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return m
+          ? {
+              r: parseInt(m[1], 16),
+              g: parseInt(m[2], 16),
+              b: parseInt(m[3], 16),
+            }
+          : { r: 0, g: 0, b: 0 };
+      }
+      function rgbToHex(r, g, b) {
+        const h = (n) => n.toString(16).padStart(2, "0");
+        return `#${h(r)}${h(g)}${h(b)}`;
+      }
+      function luminance(r, g, b) {
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      }
+
+      const blendFns = {
+        Normal: (b, s) => s,
+        Multiply: (b, s) => (b * s) / 255,
+        Screen: (b, s) => 255 - ((255 - b) * (255 - s)) / 255,
+        Overlay: (b, s) =>
+          b < 128 ? (2 * b * s) / 255 : 255 - (2 * (255 - b) * (255 - s)) / 255,
+        "Soft Light": (b, s) => {
+          s /= 255;
+          b /= 255;
+          const out = (1 - 2 * s) * b * b + 2 * s * b;
+          return clamp(Math.round(out * 255), 0, 255);
+        },
+      };
+
+      function applyContrast(v, amount) {
+        const t = amount / 100;
+        const f = (v - 128) * (1 + t) + 128;
+        return clamp(Math.round(f), 0, 255);
+      }
+
+      const state = { img: null, fit: "fit" };
+
+      const canvas = document.getElementById("canvas");
+      const ctx = canvas.getContext("2d");
+
+      const fileInput = document.getElementById("fileInput");
+      const drop = document.getElementById("drop");
+      const cDark = document.getElementById("cDark");
+      const cLight = document.getElementById("cLight");
+      const cDarkHex = document.getElementById("cDarkHex");
+      const cLightHex = document.getElementById("cLightHex");
+      const contrast = document.getElementById("contrast");
+      const intensity = document.getElementById("intensity");
+      const format = document.getElementById("format");
+      const quality = document.getElementById("quality");
+      const downloadBtn = document.getElementById("downloadBtn");
+      const fitBtn = document.getElementById("fitBtn");
+      const fillBtn = document.getElementById("fillBtn");
+      const resetBtn = document.getElementById("resetBtn");
+
+      function syncHexInputs() {
+        cDarkHex.value = cDark.value;
+        cLightHex.value = cLight.value;
+      }
+      cDark.addEventListener("input", syncHexInputs);
+      cLight.addEventListener("input", syncHexInputs);
+      cDarkHex.addEventListener("change", () => {
+        if (/^#([0-9a-f]{6})$/i.test(cDarkHex.value))
+          cDark.value = cDarkHex.value;
+        render();
+      });
+      cLightHex.addEventListener("change", () => {
+        if (/^#([0-9a-f]{6})$/i.test(cLightHex.value))
+          cLight.value = cLightHex.value;
+        render();
+      });
+
+      contrast.addEventListener("input", () => {
+        document.getElementById("contrastVal").textContent = contrast.value;
+        render();
+      });
+      intensity.addEventListener("input", () => {
+        document.getElementById("intensityVal").textContent =
+          intensity.value + "%";
+        render();
+      });
+
+      fitBtn.addEventListener("click", () => {
+        state.fit = "fit";
+        render();
+      });
+      fillBtn.addEventListener("click", () => {
+        state.fit = "fill";
+        render();
+      });
+      resetBtn.addEventListener("click", () => {
+        cDark.value = "#096234";
+        cLight.value = "#FF89C7";
+        syncHexInputs();
+        contrast.value = 0;
+        document.getElementById("contrastVal").textContent = "0";
+        intensity.value = 100;
+        document.getElementById("intensityVal").textContent = "100%";
+        state.fit = "fit";
+        render();
+      });
+
+      fileInput.addEventListener("change", (e) => handleFiles(e.target.files));
+      ["dragenter", "dragover"].forEach((ev) =>
+        drop.addEventListener(ev, (e) => {
+          e.preventDefault();
+          drop.classList.add("bg-neutral-800/50");
+        })
+      );
+      ["dragleave", "drop"].forEach((ev) =>
+        drop.addEventListener(ev, (e) => {
+          e.preventDefault();
+          drop.classList.remove("bg-neutral-800/50");
+        })
+      );
+      drop.addEventListener("drop", (e) => handleFiles(e.dataTransfer.files));
+
+      function handleFiles(files) {
+        const f = files && files[0];
+        if (!f) return;
+        const img = new Image();
+        img.onload = () => {
+          state.img = img;
+          canvas.width = img.width;
+          canvas.height = img.height;
+          render();
+        };
+        img.onerror = () => alert("Gagal memuat gambar.");
+        img.src = URL.createObjectURL(f);
+      }
+
+      function render() {
+        const img = state.img;
+        if (!img) {
+          const { width, height } = canvas.getBoundingClientRect();
+          const w = (canvas.width = Math.max(800, Math.round(width)));
+          const h = (canvas.height = Math.max(450, Math.round(height)));
+          ctx.fillStyle = "#0a0a0a";
+          ctx.fillRect(0, 0, w, h);
+          ctx.fillStyle = "#777";
+          ctx.font = "14px ui-monospace, SFMono-Regular, Menlo, monospace";
+          ctx.fillText("Upload gambar untuk mulai…", 16, 28);
+          return;
+        }
+
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = Math.round(rect.width);
+        canvas.height = Math.round(rect.height);
+
+        const cw = canvas.width,
+          ch = canvas.height;
+        const ir = img.width / img.height;
+        const cr = cw / ch;
+        let dw, dh;
+        if (state.fit === "fit") {
+          if (ir > cr) {
+            dw = cw;
+            dh = Math.round(cw / ir);
+          } else {
+            dh = ch;
+            dw = Math.round(ch * ir);
+          }
+        } else {
+          if (ir < cr) {
+            dw = cw;
+            dh = Math.round(cw / ir);
+          } else {
+            dh = ch;
+            dw = Math.round(ch * ir);
+          }
+        }
+        const dx = Math.round((cw - dw) / 2),
+          dy = Math.round((ch - dh) / 2);
+
+        ctx.drawImage(img, dx, dy, dw, dh);
+
+        const imgData = ctx.getImageData(dx, dy, dw, dh);
+        const p = imgData.data;
+
+        const dark = hexToRgb(cDark.value);
+        const light = hexToRgb(cLight.value);
+        const blendFn = blendFns["Normal"];
+        const inten = intensity.value / 100;
+        const contr = Number(contrast.value);
+
+        for (let i = 0; i < p.length; i += 4) {
+          let r = p[i],
+            g = p[i + 1],
+            b = p[i + 2];
+
+          let lum = luminance(r, g, b);
+          lum = applyContrast(lum, contr) / 255;
+          lum = clamp(lum, 0, 1);
+
+          const gr = Math.round(lerp(dark.r, light.r, lum));
+          const gg = Math.round(lerp(dark.g, light.g, lum));
+          const gb = Math.round(lerp(dark.b, light.b, lum));
+
+          let nr = blendFn(r, gr);
+          let ng = blendFn(g, gg);
+          let nb = blendFn(b, gb);
+
+          p[i] = Math.round(lerp(r, nr, inten));
+          p[i + 1] = Math.round(lerp(g, ng, inten));
+          p[i + 2] = Math.round(lerp(b, nb, inten));
+        }
+        ctx.putImageData(imgData, dx, dy);
+      }
+
+      downloadBtn.addEventListener("click", () => {
+        if (!state.img) return alert("Belum ada gambar.");
+        const tmp = document.createElement("canvas");
+        tmp.width = state.img.width;
+        tmp.height = state.img.height;
+        const tctx = tmp.getContext("2d");
+        tctx.drawImage(state.img, 0, 0);
+        const imgData = tctx.getImageData(0, 0, tmp.width, tmp.height);
+        const p = imgData.data;
+
+        const dark = hexToRgb(cDark.value);
+        const light = hexToRgb(cLight.value);
+        const blendFn = blendFns["Normal"];
+        const inten = intensity.value / 100;
+        const contr = Number(contrast.value);
+
+        for (let i = 0; i < p.length; i += 4) {
+          let r = p[i],
+            g = p[i + 1],
+            b = p[i + 2];
+          let lum = luminance(r, g, b);
+          lum = applyContrast(lum, contr) / 255;
+          lum = clamp(lum, 0, 1);
+          const gr = Math.round(lerp(dark.r, light.r, lum));
+          const gg = Math.round(lerp(dark.g, light.g, lum));
+          const gb = Math.round(lerp(dark.b, light.b, lum));
+          let nr = blendFn(r, gr),
+            ng = blendFn(g, gg),
+            nb = blendFn(b, gb);
+          p[i] = Math.round(lerp(r, nr, inten));
+          p[i + 1] = Math.round(lerp(g, ng, inten));
+          p[i + 2] = Math.round(lerp(b, nb, inten));
+        }
+        tctx.putImageData(imgData, 0, 0);
+
+        const type = format.value;
+        const q = Number(quality.value) / 100;
+        const url = tctx.canvas.toDataURL(type, q);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `duotone_${Date.now()}.${type.split("/")[1]}`;
+        a.click();
+      });
+
+      render();
+    </script>
+  </body>
+</html>
